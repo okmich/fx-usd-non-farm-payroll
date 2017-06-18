@@ -1,0 +1,11 @@
+spark-shell --packages org.joda:joda-convert:1.8.1,joda-time:joda-time:2.9.6
+
+// https://mvnrepository.com/artifact/org.joda/joda-convert
+libraryDependencies += "org.joda" % "joda-convert" % "1.8.1"
+
+// https://mvnrepository.com/artifact/joda-time/joda-time
+libraryDependencies += "joda-time" % "joda-time" % "2.9.6"
+
+
+
+org.joda:joda-convert:1.8.1,joda-time:joda-time:2.9.6

@@ -1,0 +1,122 @@
+hdfs dfs -mkdir -p /user/cloudera/rawdata/hist_fx_nfp/nfp_txt
+
+
+hdfs dfs -moveFromLocal non_farm_payroll_dataset.txt /user/cloudera/rawdata/hist_fx_nfp/nfp_txt
+hdfs dfs -moveFromLocal eurusd/ /user/cloudera/rawdata/hist_fx_nfp
+hdfs dfs -moveFromLocal gbpusd/ /user/cloudera/rawdata/hist_fx_nfp
+hdfs dfs -moveFromLocal usdjpy/ /user/cloudera/rawdata/hist_fx_nfp
+
+create schema fx_nfp;
+use fx_nfp;
+create external table tick_data_raw (
+	trade_dt string,
+	bid decimal(12,6),
+	ask decimal(12,6),
+	vol tinyint
+)
+partitioned by (curr_pair string)
+row format delimited
+fields terminated by ',';
+
+alter table tick_data_raw add partition (curr_pair='EURUSD') location '/user/cloudera/rawdata/hist_fx_nfp/eurusd';
+alter table tick_data_raw add partition (curr_pair='GBPUSD') location '/user/cloudera/rawdata/hist_fx_nfp/gbpusd';
+alter table tick_data_raw add partition (curr_pair='USDJPY') location '/user/cloudera/rawdata/hist_fx_nfp/usdjpy';
+
+create external table nfp_hist_raw(
+	release_date string,
+	release_time string,
+	actual string,
+	forecast string,
+	previous string
+)
+row format delimited
+fields terminated by '|'
+location '/user/cloudera/rawdata/hist_fx_nfp/nfp_txt';
+
+create external table nfp_hist(
+    release_date string,
+    release_time string,
+    actual int,
+    forecast int,
+    previoius int,
+    trading_day string,
+    trading_time int
+)
+stored as parquet;
+
+insert overwrite table nfp_hist
+select release_date,
+	release_time, 
+	cast(regexp_replace(actual, 'K', '') as int) actual, 
+	cast(regexp_replace(forecast, 'K', '') as int) forecast, 
+	cast(regexp_replace(previous, 'K', '') as int) previous,
+	concat(substr(release_date, 9, 4),case substr(release_date, 1, 3)
+	when 'Jan' then '01'
+	when 'Feb' then '02'
+	when 'Mar' then '03'
+	when 'Apr' then '04'
+	when 'May' then '05'
+	when 'Jun' then '06'
+	when 'Jul' then '07'
+	when 'Aug' then '08'
+	when 'Sep' then '09'
+	when 'Oct' then '10'
+	when 'Nov' then '11'
+	when 'Dec' then '12'
+	else 'NA' end, substr(release_date, 5, 2)) trading_day, 
+	cast(regexp_replace(release_time, ':', '') as int) trading_time
+from nfp_hist_raw 
+where release_time <> 'Time';
+
+
+-- do this in impala
+create external table tick_data (
+	trade_dt string, day string, hour string, min string, sec string, milli string,
+	bid decimal(12,6),
+	ask decimal(12,6)
+)
+partitioned by (curr_pair string)
+stored as parquet;
+
+alter table tick_data add partition (curr_pair='EURUSD');
+alter table tick_data add partition (curr_pair='GBPUSD');
+alter table tick_data add partition (curr_pair='USDJPY');
+
+insert overwrite table tick_data partition (curr_pair='EURUSD')
+    select trade_dt, 
+    substr(trade_dt, 1, 8) trading_day,
+    substr(trade_dt, 10, 2)  trading_hour,
+    substr(trade_dt, 12, 2)  trading_min,
+    substr(trade_dt, 14, 2)  trading_sec,
+    substr(trade_dt, 16, 3) trading_milli, ask, bid
+    from tick_data_raw 
+where curr_pair = 'EURUSD';
+
+insert overwrite table tick_data partition (curr_pair='GBPUSD')
+	select trade_dt, 
+	substr(trade_dt, 1, 8) trading_day,
+	substr(trade_dt, 10, 2)  trading_hour,
+	substr(trade_dt, 12, 2)  trading_min,
+	substr(trade_dt, 14, 2)  trading_sec,
+	substr(trade_dt, 16, 3) trading_milli, ask, bid
+	from tick_data_raw 
+where curr_pair = 'GBPUSD';
+
+insert overwrite table tick_data partition (curr_pair='USDJPY')
+	select trade_dt, 
+	substr(trade_dt, 1, 8) trading_day,
+	substr(trade_dt, 10, 2)  trading_hour,
+	substr(trade_dt, 12, 2)  trading_min,
+	substr(trade_dt, 14, 2)  trading_sec,
+	substr(trade_dt, 16, 3) trading_milli, ask, bid
+	from tick_data_raw 
+where curr_pair = 'USDJPY';
+
+
+-- for space sake, delete the files 
+hdfs dfs -rmr -skipTrash /user/cloudera/rawdata/hist_fx_nfp/eurusd
+hdfs dfs -rmr -skipTrash /user/cloudera/rawdata/hist_fx_nfp/gbpusd
+hdfs dfs -rmr -skipTrash /user/cloudera/rawdata/hist_fx_nfp/usdjpy
+
+drop table tick_data_raw;
+
