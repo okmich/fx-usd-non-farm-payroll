@@ -59,29 +59,6 @@ val tickDayCurrPairGroupRDD =  tickNfpDataRdd.values.persist(MEMORY_AND_DISK_SER
 
 import org.joda.time.LocalDateTime
 
-def priceDtFromTickData(tick : TickNfpData) : LocalDateTime = {
-	new LocalDateTime(
-		tick.day.substring(0,4).toInt,
-		tick.day.substring(4,6).toInt,
-		tick.day.substring(6,8).toInt,
-		tick.hour,
-		tick.min,
-		tick.sec,
-		tick.milli
-	)
-}
-
-def reportDtFromTickData(tick : TickNfpData) : LocalDateTime = {
-	new LocalDateTime(
-		tick.nfpday.substring(0,4).toInt,
-		tick.nfpday.substring(4,6).toInt,
-		tick.nfpday.substring(6,8).toInt,
-		tick.nfpHour,
-		tick.nfpMin,
-		0,
-		0
-	)
-}
 
 val time = 5
 
