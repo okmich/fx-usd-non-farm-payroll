@@ -1,0 +1,9 @@
+Agenda
+================
+Discuss the user objective and real life purpose of this study.
+Gathering data for market analysis
+Using Hive to make the data accessible
+Writing spark application to structure the data
+Making the application an executable
+Prepare the basis for a Machine Learning system
+Incremental loading of data

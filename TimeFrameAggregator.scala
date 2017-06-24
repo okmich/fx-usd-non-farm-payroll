@@ -30,15 +30,10 @@ class TimeFrameAggregator extends UserDefinedAggregateFunction {
    	override def bufferSchema: StructType = StructType(
 	    StructField("tickTs", TimestampType) ::
 	    StructField("nfpTs", TimestampType) ::
-	    StructField("nfpTsPlusThresh", TimestampType) ::
-	    StructField("maxPrice", new DecimalType(12,6)) ::
-	    StructField("closePrice", new DecimalType(12,6)) ::
-	    StructField("maxPriceTs", TimestampType) ::
-	    StructField("closePriceTs", TimestampType) :: Nil)
+	    StructField("cPrice", new DecimalType(12,6)) ::
+	    StructField("cPriceTs", TimestampType) :: Nil)
 
    	override def dataType: DataType = StructType(
-	    StructField("max_price", new DecimalType(12,6)) ::
-	    StructField("max_price_ts", TimestampType) ::
 	    StructField("close_price", new DecimalType(12,6)) ::
 	    StructField("close_price_ts", TimestampType) :: Nil)
 
@@ -47,9 +42,6 @@ class TimeFrameAggregator extends UserDefinedAggregateFunction {
 	    buffer(1) = null
 	    buffer(2) = null
 	    buffer(3) = null
-	    buffer(4) = null
-	    buffer(5) = null
-	    buffer(6) = null
 	  }
 
 	override def deterministic : Boolean = true
@@ -67,46 +59,47 @@ class TimeFrameAggregator extends UserDefinedAggregateFunction {
 		val thresh = input.getAs[Int](8)
 
 		val nfpTs = getNfpTs(day, tradHour, tradMin)
-
-		buffer(0) = getTickTs(day, hour, min, sec, milli)
-		buffer(1) = nfpTs
-		buffer(2) = tsPlusMins(nfpTs, thresh)
-		buffer(3) = price
-		buffer(4) = price
-		buffer(5) = buffer(0)
-		buffer(6) = buffer(0)
+		val tickTs = getTickTs(day, hour, min, sec, milli)
+		//if the tickTs is between nfpTs and nfpTsPlusThresh
+		if (tickTs.after(nfpTs) && tickTs.before(tsPlusMins(nfpTs, thresh))) {
+			//println(s"nfpTs is $nfpTs while tickTs is $tickTs")
+			buffer(0) = getTickTs(day, hour, min, sec, milli)
+			buffer(1) = nfpTs
+			buffer(2) = price
+			buffer(3) = buffer(0)
+		}
 	}
 
-	// This is how to merge two objects with the bufferSchema type.
-	override def merge(buffer1: MutableAggregationBuffer, row: Row): Unit = {
-		val tickTs = row.getAs[Timestamp](0)
-		val nfpTs = row.getAs[Timestamp](1)
-		val nfpTsPlusThresh = row.getAs[Timestamp](1)
-		//if the tickTs is between nfpTs and nfpTsPlusThresh
-		if (tickTs.after(nfpTs) && tickTs.before(nfpTsPlusThresh)){
-			buffer1(0) = tickTs
-			buffer1(1) = nfpTs
-			buffer1(2) = nfpTsPlusThresh
-			//get maxPrice
-			val price = buffer1.getAs[JBigDecimal](3)
-			val rowPrice = row.getAs[JBigDecimal](3)
-			if (rowPrice.compareTo(price) >= 0){
-				buffer1(3) = rowPrice
-				buffer1(5) = row.getAs[Timestamp](5) //as the tickts as the max
-			}
-			//get the max time
-			val ts = buffer1.getAs[Timestamp](0)
-			if (tickTs.after(ts)){
-				buffer1(4) = rowPrice
-				buffer1(6) = tickTs
+	override def merge(buffer: MutableAggregationBuffer, row: Row): Unit = {
+		//when row contains value
+		if (row.getAs[Timestamp](0) != null) {
+			val tickTs = row.getAs[Timestamp](0)
+			val nfpTs = row.getAs[Timestamp](1)
+			val closePrice = row.getAs[JBigDecimal](2)
+			val closePriceTs = row.getAs[Timestamp](3)
+
+			//if buffer contains values
+			if (buffer(0) != null){
+				buffer(0) = tickTs
+				buffer(1) = nfpTs
+				//get the max time
+				val ts = buffer.getAs[Timestamp](0)
+				if (tickTs.after(ts)) {
+					buffer(2) = closePrice
+					buffer(3) = tickTs
+				}
+			} else {
+				buffer(0) = tickTs
+				buffer(1) = nfpTs
+				buffer(2) = closePrice
+				buffer(3) = closePriceTs
 			}
 		}
 	}
 
-
 	// This is where you output the final value, given the final value of your bufferSchema.
 	override def evaluate(buffer: Row): Any = {
-		(buffer(3), buffer(5), buffer(4), buffer(6))
+		(buffer(2), buffer(3))
 	}
 
 	def getTickTs(day: String, hour: Int, min: Int, sec: Int, milli:Int) : Timestamp  = {

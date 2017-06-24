@@ -1,10 +1,4 @@
-import org.apache.spark.storage.StorageLevel.MEMORY_AND_DISK_SER
-
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.sql.types._
-
-import java.math.{BigDecimal => JBigDecimal}
-
 import org.apache.spark.sql.functions._
 
 :load TimeFrameAggregator.scala
@@ -28,21 +22,47 @@ val txnformedDF = joinedDF.select($"day",$"hour".cast("int"),$"min".cast("int"),
 	$"sec".cast("int"),$"milli".cast("int"),$"bid",$"ask",$"curr_pair",
 	$"trading_day", $"trading_hour".cast("int"), $"trading_min".cast("int"), $"previoius", $"forecast", $"actual").cache
 
-
-
 val aggGroupedData = txnformedDF.groupBy($"curr_pair", $"day", $"trading_hour", $"trading_min")
+
+
 
 :load TimeFrameAggregator.scala
 val tfAgg = new TimeFrameAggregator
-val oneMinDF = aggGroupedData.agg(tfAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(1)).as("omb"))
 
-oneMinDF.select("omb.max_price","omb.max_price_ts","omb.close_price","omb.close_price_ts").show
+val oneMinDF = aggGroupedData.agg(tfAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(1)).as("omb")).
+select(concat($"curr_pair", $"day").as("key"), $"curr_pair", $"day", $"trading_hour", $"trading_min", $"omb.close_price", $"omb.close_price_ts")
+
+val fiveMinDF = aggGroupedData.agg(tfAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(5)).as("omb")).
+select(concat($"curr_pair", $"day").as("key"), $"curr_pair", $"day", $"trading_hour", $"trading_min", $"omb.close_price", $"omb.close_price_ts")
+
+val fifteenMinDF = aggGroupedData.agg(tfAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(15)).as("omb")).
+select(concat($"curr_pair", $"day").as("key"), $"curr_pair", $"day", $"trading_hour", $"trading_min", $"omb.close_price", $"omb.close_price_ts")
 
 
-val fiveMinDF = aggGroupedData.agg(tfAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(5)))
+val numSeq = Seq(1,5.15)
+val seqDFs = numSeq.map(n => {
+		aggGroupedData.agg(tfAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(n)).as("omb")).
+			select(concat($"curr_pair", $"day").as("key"+n), 
+				$"omb.close_price".as("close_price_"+n), $"omb.close_price_ts".as("close_price_ts_"+n))
+	}).zip(numSeq)
 
-val fifteenMinDF = aggGroupedData.agg(tfAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(15)))
+val DF = txnformedDF.select(concat($"curr_pair", $"day").as("key0"), 
+	$"previoius", $"forecast", $"actual", $"curr_pair", 
+	$"day", concat($"trading_hour", $"trading_min").as("time"))
 
 
+val aggdTable = seqDFs.reduce((f: (DataFrame, Int), g: (DataFrame, Int)) => {
+		val xDF = f._1
+		val yDF = g._1
+		(xDF.join(yDF, xDF("key"+ f._2) === yDF("key"+g._2), "inner"), f._2)
+	})._1
+
+val newKey = numSeq map ("key"+_) head
+
+val finalTable = DF.join(aggdTable, $"key0" === aggdTable(newKey), "inner")
+
+
+aggGroupedData.agg(tfAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(60)).as("omb")).
+select("curr_pair", "day", "trading_hour", "trading_min","omb.close_price","omb.close_price_ts").show
 
 
