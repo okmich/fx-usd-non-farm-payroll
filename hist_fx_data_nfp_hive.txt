@@ -40,7 +40,8 @@ create external table nfp_hist(
     forecast int,
     previoius int,
     trading_day string,
-    trading_time int
+    trading_hour int,
+    trading_min int
 )
 stored as parquet;
 
@@ -64,14 +65,15 @@ select release_date,
 	when 'Nov' then '11'
 	when 'Dec' then '12'
 	else 'NA' end, substr(release_date, 5, 2)) trading_day, 
-	cast(regexp_replace(release_time, ':', '') as int) trading_time
+	cast(substr(release_time, 1, 2) as int) trading_hour,
+	cast(substr(release_time, 4, 2) as int) trading_min
 from nfp_hist_raw 
 where release_time <> 'Time';
 
 
 -- do this in impala
 create external table tick_data (
-	trade_dt string, day string, hour string, min string, sec string, milli string,
+	trade_dt string, day string, hour int, min int, sec int, milli int,
 	bid decimal(12,6),
 	ask decimal(12,6)
 )
@@ -83,33 +85,33 @@ alter table tick_data add partition (curr_pair='GBPUSD');
 alter table tick_data add partition (curr_pair='USDJPY');
 
 insert overwrite table tick_data partition (curr_pair='EURUSD')
-    select trade_dt, 
+select trade_dt, 
     substr(trade_dt, 1, 8) trading_day,
-    substr(trade_dt, 10, 2)  trading_hour,
-    substr(trade_dt, 12, 2)  trading_min,
-    substr(trade_dt, 14, 2)  trading_sec,
-    substr(trade_dt, 16, 3) trading_milli, ask, bid
+    cast(substr(trade_dt, 10, 2) as int)  trading_hour,
+    cast(substr(trade_dt, 12, 2) as int)  trading_min,
+    cast(substr(trade_dt, 14, 2) as int)  trading_sec,
+    cast(substr(trade_dt, 16, 3) as int) trading_milli, ask, bid
     from tick_data_raw 
 where curr_pair = 'EURUSD';
 
 insert overwrite table tick_data partition (curr_pair='GBPUSD')
-	select trade_dt, 
-	substr(trade_dt, 1, 8) trading_day,
-	substr(trade_dt, 10, 2)  trading_hour,
-	substr(trade_dt, 12, 2)  trading_min,
-	substr(trade_dt, 14, 2)  trading_sec,
-	substr(trade_dt, 16, 3) trading_milli, ask, bid
-	from tick_data_raw 
+select trade_dt, 
+    substr(trade_dt, 1, 8) trading_day,
+    cast(substr(trade_dt, 10, 2) as int)  trading_hour,
+    cast(substr(trade_dt, 12, 2) as int)  trading_min,
+    cast(substr(trade_dt, 14, 2) as int)  trading_sec,
+    cast(substr(trade_dt, 16, 3) as int) trading_milli, ask, bid
+    from tick_data_raw 
 where curr_pair = 'GBPUSD';
 
 insert overwrite table tick_data partition (curr_pair='USDJPY')
-	select trade_dt, 
-	substr(trade_dt, 1, 8) trading_day,
-	substr(trade_dt, 10, 2)  trading_hour,
-	substr(trade_dt, 12, 2)  trading_min,
-	substr(trade_dt, 14, 2)  trading_sec,
-	substr(trade_dt, 16, 3) trading_milli, ask, bid
-	from tick_data_raw 
+select trade_dt, 
+    substr(trade_dt, 1, 8) trading_day,
+    cast(substr(trade_dt, 10, 2) as int)  trading_hour,
+    cast(substr(trade_dt, 12, 2) as int)  trading_min,
+    cast(substr(trade_dt, 14, 2) as int)  trading_sec,
+    cast(substr(trade_dt, 16, 3) as int) trading_milli, ask, bid
+    from tick_data_raw 
 where curr_pair = 'USDJPY';
 
 

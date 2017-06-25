@@ -13,7 +13,7 @@ import java.util.Date
 val hiveContext = new HiveContext(sc)
 
 val nfp_hist_df = hiveContext.read.table("fx_nfp.nfp_hist").
-	select("trading_day", "trading_hour", "trading_min", "previoius", "forecast", "actual")
+	select("trading_day", "trading_hour", "trading_min", "previous", "forecast", "actual")
 
 val nfp_hist = nfp_hist_df.map((row: Row) => {
 	(row.getString(0), row.getString(1).toInt, row.getString(2).toInt, row.getInt(3), row.getInt(4), row.getInt(5))
@@ -56,6 +56,8 @@ val tickNfpDataRdd = tick_data_rdd  mapPartitions (itr => {
  
 
 val tickDayCurrPairGroupRDD =  tickNfpDataRdd.values.persist(MEMORY_AND_DISK_SER)
+
+tickDayCurrPairGroupRDD.count
 
 import org.joda.time.LocalDateTime
 
