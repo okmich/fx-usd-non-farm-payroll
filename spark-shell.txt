@@ -9,3 +9,5 @@ libraryDependencies += "joda-time" % "joda-time" % "2.9.6"
 
 
 org.joda:joda-convert:1.8.1,joda-time:joda-time:2.9.6
+
+spark-submit --master yarn --class App ./target/scala-2.10/nfp-fx-assembly-1.0.jar -timeFrames:1,2,3,4,5 -dbName:fx_nfp -table:prices_1_to_5

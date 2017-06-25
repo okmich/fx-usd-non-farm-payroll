@@ -1,3 +1,5 @@
+package udaf
+
 import org.apache.spark.sql.expressions.MutableAggregationBuffer
 import org.apache.spark.sql.expressions.UserDefinedAggregateFunction
 import org.apache.spark.sql.Row
@@ -15,6 +17,8 @@ import java.sql.Timestamp
 import org.joda.time.LocalDateTime
 
 class TimeFrameAggregator extends UserDefinedAggregateFunction {
+
+	type Price = (JBigDecimal, Timestamp, JBigDecimal, Timestamp)
 
 	override def inputSchema: StructType = StructType(
    		StructField("day", StringType) ::
@@ -74,34 +78,12 @@ class TimeFrameAggregator extends UserDefinedAggregateFunction {
 	}
 
 	override def merge(buffer: MutableAggregationBuffer, row: Row): Unit = {
-		//when row contains value
-		if (row.getAs[JBigDecimal](0) != null) {
-			val openPrice = row.getAs[JBigDecimal](0)
-			val openPriceTs = row.getAs[Timestamp](1)
-			val closePrice = row.getAs[JBigDecimal](2)
-			val closePriceTs = row.getAs[Timestamp](3)
+		val result = getEarliestAndLatest(buffer, row)
 
-			//if buffer contains values
-			if (buffer.getAs[Timestamp](1) != null){
-				val ots = buffer.getAs[Timestamp](1)
-				//get min time
-				if (openPriceTs.before(ots)) {
-					buffer(0) = openPrice
-					buffer(1) = openPriceTs
-				}
-				val cts = buffer.getAs[Timestamp](3)
-				//get the max time
-				if (closePriceTs.after(cts)) {
-					buffer(2) = closePrice
-					buffer(3) = closePriceTs
-				}
-			} else {
-				buffer(0) = openPrice
-				buffer(1) = openPriceTs
-				buffer(2) = closePrice
-				buffer(3) = closePriceTs
-			}
-		}
+		buffer(0) = result._1
+		buffer(1) = result._2
+		buffer(2) = result._3
+		buffer(3) = result._4
 	}
 
 	// This is where you output the final value, given the final value of your bufferSchema.
@@ -131,5 +113,32 @@ class TimeFrameAggregator extends UserDefinedAggregateFunction {
 		val localDT = new LocalDateTime(ts.getTime).plusMinutes(thresh)
 
 		new Timestamp(localDT.toDate.getTime)
-	}				
+	}	
+
+	def getEarliestAndLatest(a : Price, b: Price) : Price = {
+		var open : (JBigDecimal, Timestamp) = null
+		var close : (JBigDecimal, Timestamp) = null
+
+		if (b._2 != null){
+			//get min time
+			open = if (a._2 == null || b._2.before(a._2)) (b._1, b._2) else (a._1, a._2)
+			//get the max time
+			close = if (a._2 == null || b._4.after(a._4)) (b._3, b._4) else (a._3, a._4)
+		} else {
+			open = (a._1, a._2)
+			close = (a._3, a._4)
+		}
+
+		(open._1, open._2, close._1, close._2)
+	}
+
+	implicit def castInternalBufferToPrice(buffer: MutableAggregationBuffer) : Price = {
+		(buffer.getAs[JBigDecimal](0), buffer.getAs[Timestamp](1),
+			 buffer.getAs[JBigDecimal](2), buffer.getAs[Timestamp](3))
+	}
+
+	implicit def castInternalBufferToPrice(row: Row) : Price = {
+		(row.getAs[JBigDecimal](0), row.getAs[Timestamp](1), 
+			row.getAs[JBigDecimal](2), row.getAs[Timestamp](3))
+	}
 }
