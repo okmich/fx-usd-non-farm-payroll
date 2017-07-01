@@ -7,7 +7,7 @@ import java.math.{BigDecimal => JBigDecimal}
 
 abstract class BaseAggregator(colName: String) extends UserDefinedAggregateFunction {
 
-  type Price = (JBigDecimal, Timestamp, JBigDecimal, Timestamp)
+  type Price = (JBigDecimal, Timestamp)
 
   override def inputSchema: StructType = StructType(
     StructField("day", StringType) ::
@@ -25,7 +25,7 @@ abstract class BaseAggregator(colName: String) extends UserDefinedAggregateFunct
     StructField("priceTs", TimestampType) :: Nil)
 
   override def dataType: DataType = StructType(
-    StructField("colName", new DecimalType(12,6)) ::
+    StructField(colName, new DecimalType(12,6)) ::
     StructField(colName + "_ts", TimestampType) :: Nil)
 
   override def initialize(buffer: MutableAggregationBuffer): Unit = {
@@ -49,26 +49,23 @@ abstract class BaseAggregator(colName: String) extends UserDefinedAggregateFunct
 
     val nfpTs = getNfpTs(day, tradHour, tradMin)
     val tickTs = getTickTs(day, hour, min, sec, milli)
-    //if the tickTs is between nfpTs and nfpTsPlusThresh
+    //nfpTsPlusThresh
+    val maxTs = tsPlusMins(nfpTs, x)
+    //if the tickTs is between nfpTs and maxTs
     //big filtering 
-    if (tickTs.after(nfpTs) && tickTs.before(tsPlusMins(nfpTs, x))) {
-      //println(s"nfpTs is $nfpTs while tickTs is $tickTs")
+    println(s"nfpTs is $nfpTs while tickTs is $tickTs")
+    if (tickTs.after(nfpTs) && tickTs.before(maxTs)) {
       buffer(0) = price
       buffer(1) = tickTs
-      buffer(2) = null
-      buffer(3) = null
     }
   }
 
-  // override def merge(buffer: MutableAggregationBuffer, row: Row): Unit = {
-  //   println("Merge " + (buffer(0),buffer(1),buffer(2),buffer(3)))
-  //   val result = getEarliestAndLatest(buffer, row)
+  override def merge(buffer: MutableAggregationBuffer, row: Row): Unit = {
+    val result = getPricePoint(buffer, row)
 
-  //   buffer(0) = result._1
-  //   buffer(1) = result._2
-  //   buffer(2) = result._3
-  //   buffer(3) = result._4
-  // }
+    buffer(0) = result._1
+    buffer(1) = result._2
+  }
 
   // This is where you output the final value, given the final value of your bufferSchema.
   override def evaluate(buffer: Row): Any = {
@@ -83,6 +80,8 @@ abstract class BaseAggregator(colName: String) extends UserDefinedAggregateFunct
       hour, min, sec, milli
     ).toDate.getTime)
   }
+
+  def getPricePoint(a : Price, b: Price): Price
 
   def getNfpTs(day: String, nfpHour: Int, nfpMin: Int) : Timestamp = {
     new Timestamp(new LocalDateTime(
@@ -120,17 +119,70 @@ abstract class BaseAggregator(colName: String) extends UserDefinedAggregateFunct
   // }
 
   implicit def castInternalBufferToPrice(buffer: MutableAggregationBuffer) : Price = {
-    (buffer.getAs[JBigDecimal](0), buffer.getAs[Timestamp](1),
-       buffer.getAs[JBigDecimal](2), buffer.getAs[Timestamp](3))
+    (buffer.getAs[JBigDecimal](0), buffer.getAs[Timestamp](1))
   }
 
   implicit def castInternalBufferToPrice(row: Row) : Price = {
-    (row.getAs[JBigDecimal](0), row.getAs[Timestamp](1), 
-      row.getAs[JBigDecimal](2), row.getAs[Timestamp](3))
+    (row.getAs[JBigDecimal](0), row.getAs[Timestamp](1))
   }
 }
 
 
-class OpenAggregator(val colName: String) extends BaseAggregator(colName: String) {
-  
+class FirstAggregator extends BaseAggregator("open_price") {
+  def getPricePoint(a : Price, b: Price) : Price = {
+    if (a != null) a else b
+  }
+}
+
+
+class OpenAggregator extends BaseAggregator("open_price") {
+  def getPricePoint(a : Price, b: Price) : Price = {
+    var open : (JBigDecimal, Timestamp) = null
+
+    val tickPrice = b._1
+    val tickTs = b._2
+
+    if (tickTs != null){
+      //get min time
+      open = if (a._2 == null || tickTs.before(a._2)) (tickPrice, tickTs) else (a._1, a._2)
+    } else {
+      open = (a._1, a._2)
+    }
+
+    (open._1, open._2)  
+  }
+}
+
+class CloseAggregator extends BaseAggregator("close_price") {
+  def getPricePoint(a : Price, b: Price) : Price = {
+    var close : (JBigDecimal, Timestamp) = null
+
+    val tickPrice = b._1
+    val tickTs = b._2
+
+    if (tickTs != null){
+      //get max time
+      close = if (a._2 == null || tickTs.after(a._2)) (tickPrice, tickTs) else (a._1, a._2)
+    } else {
+      close = (a._1, a._2)
+    }
+    (close._1, close._2)  
+  }
+}
+
+class MaxPriceAggregator extends BaseAggregator("high_price") {
+  def getPricePoint(a : Price, b: Price) : Price = {
+    var max : (JBigDecimal, Timestamp) = null
+
+    val tickPrice = b._1
+    val tickTs = b._2
+
+    if (tickPrice != null){
+      //get max price
+      max = if (a._1 == null || (tickPrice.compareTo(a._1)  >= 0)) (tickPrice, tickTs) else (a._1, a._2)
+    } else {
+      max = (a._1, a._2)
+    }
+    (max._1, max._2)  
+  }
 }

@@ -1,0 +1,6 @@
+create view v_nfp_history as 
+select trading_day, concat(cast(trading_hour as string), ':', cast(trading_min as string)) as trading_time, actual, forecast, previoius 
+from nfp_hist
+
+-- query nfp to get the difference between the actual number from the forecasted and previous numbers
+select trading_day, trading_time, actual, actual - forecast diff_forecast, actual - previoius diff_previous from v_nfp_history

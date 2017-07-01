@@ -24,7 +24,7 @@ val aggGroupedData = txnformedDF.groupBy($"curr_pair", $"day", $"trading_hour", 
 
 
 :load TimeFrameAggregator.scala
-val tfAgg = new TimeFrameAggregator
+val tfAgg = new OpenCloseAggregator
 
 val oneMinDF = aggGroupedData.agg(tfAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(1)).as("omb")).
 select(concat($"curr_pair", $"day").as("key"), $"curr_pair", $"day", $"trading_hour", $"trading_min", $"omb.open_price", $"omb.open_price_ts", $"omb.close_price", $"omb.close_price_ts")

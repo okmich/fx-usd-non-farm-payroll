@@ -1,3 +1,5 @@
+package udaf
+
 import org.apache.spark.sql.expressions.MutableAggregationBuffer
 import org.apache.spark.sql.expressions.UserDefinedAggregateFunction
 import org.apache.spark.sql.Row
@@ -14,7 +16,7 @@ import java.sql.Timestamp
 
 import org.joda.time.LocalDateTime
 
-class OpenCloseAggregator extends UserDefinedAggregateFunction {
+class HighLowAggregator extends UserDefinedAggregateFunction {
 
 	type Price = (JBigDecimal, Timestamp, JBigDecimal, Timestamp)
 
@@ -30,16 +32,16 @@ class OpenCloseAggregator extends UserDefinedAggregateFunction {
    		StructField("thresh", IntegerType) :: Nil)
 
    	override def bufferSchema: StructType = StructType(
-	    StructField("oPrice", new DecimalType(12,6)) ::
-	    StructField("oPriceTs", TimestampType) ::
-	    StructField("cPrice", new DecimalType(12,6)) ::
-	    StructField("cPriceTs", TimestampType) :: Nil)
+	    StructField("hPrice", new DecimalType(12,6)) ::
+	    StructField("hPriceTs", TimestampType) ::
+	    StructField("lPrice", new DecimalType(12,6)) ::
+	    StructField("lPriceTs", TimestampType) :: Nil)
 
    	override def dataType: DataType = StructType(
-	    StructField("open_price", new DecimalType(12,6)) ::
-	    StructField("open_price_ts", TimestampType) ::
-	    StructField("close_price", new DecimalType(12,6)) ::
-	    StructField("close_price_ts", TimestampType) :: Nil)
+	    StructField("high_price", new DecimalType(12,6)) ::
+	    StructField("high_price_ts", TimestampType) ::
+	    StructField("low_price", new DecimalType(12,6)) ::
+	    StructField("low_price_ts", TimestampType) :: Nil)
 
 	override def initialize(buffer: MutableAggregationBuffer): Unit = {
 	    buffer(0) = null
@@ -67,11 +69,11 @@ class OpenCloseAggregator extends UserDefinedAggregateFunction {
 		//if the tickTs is between nfpTs and nfpTsPlusThresh
 		//big filtering 
 		if (tickTs.after(nfpTs) && tickTs.before(tsPlusMins(nfpTs, x))) {
-			println(s"nfpTs is $nfpTs while tickTs is $tickTs")
+			//println(s"nfpTs is $nfpTs while tickTs is $tickTs")
 			buffer(0) = price
 			buffer(1) = tickTs
-			buffer(2) = null
-			buffer(3) = null
+			buffer(2) = price
+			buffer(3) = tickTs
 		}
 	}
 
@@ -117,14 +119,11 @@ class OpenCloseAggregator extends UserDefinedAggregateFunction {
 		var open : (JBigDecimal, Timestamp) = null
 		var close : (JBigDecimal, Timestamp) = null
 
-		val tickPrice = b._1
-		val tickTs = b._2
-
-		if (tickTs != null){
+		if (b._2 != null){
 			//get min time
-			open = if (a._2 != null && tickTs.before(a._2)) (tickPrice, tickTs) else (a._1, a._2)
+			open = if (a._2 == null || b._2.before(a._2)) (b._1, b._2) else (a._1, a._2)
 			//get the max time
-			close = if (a._2 != null && tickTs.after(a._4)) (tickPrice, tickTs) else (a._3, a._4)
+			close = if (a._2 == null || b._4.after(a._4)) (b._3, b._4) else (a._3, a._4)
 		} else {
 			open = (a._1, a._2)
 			close = (a._3, a._4)

@@ -18,7 +18,7 @@ object App extends java.io.Serializable {
 		val hiveContext =  new HiveContext(sc)
 		import hiveContext.implicits._
 		
-		val tfAgg = new TimeFrameAggregator
+		val ocAgg = new OpenCloseAggregator
 
 		val nfp_hist_df = hiveContext.read.table("fx_nfp.nfp_hist").
 			select("trading_day", "trading_hour", "trading_min", "previoius", "forecast", "actual")
@@ -37,7 +37,7 @@ object App extends java.io.Serializable {
 
 		val numSeq = opts("timeFrames").split(",").map(_.toInt)
 		val seqDFs = numSeq.map(n => {
-				aggGroupedData.agg(tfAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(n)).as("omb")).
+				aggGroupedData.agg(ocAgg($"day",$"hour",$"min",$"sec",$"milli",$"trading_hour",$"trading_min",$"ask", lit(n)).as("omb")).
 					select(concat($"curr_pair", $"day").as("key"+n), 
 						$"omb.open_price".as("open_price_"+n), $"omb.open_price_ts".as("open_price_ts_"+n), 
 						$"omb.close_price".as("close_price_"+n), $"omb.close_price_ts".as("close_price_ts_"+n))

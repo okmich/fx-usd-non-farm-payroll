@@ -1,10 +1,16 @@
 hdfs dfs -mkdir -p /user/cloudera/rawdata/hist_fx_nfp/nfp_txt
+hdfs dfs -mkdir -p /user/cloudera/rawdata/hist_fx_nfp/gaps/eurusd
+hdfs dfs -mkdir -p /user/cloudera/rawdata/hist_fx_nfp/gaps/gbpusd
+hdfs dfs -mkdir -p /user/cloudera/rawdata/hist_fx_nfp/gaps/usdjpy
 
 
 hdfs dfs -moveFromLocal non_farm_payroll_dataset.txt /user/cloudera/rawdata/hist_fx_nfp/nfp_txt
 hdfs dfs -moveFromLocal eurusd/ /user/cloudera/rawdata/hist_fx_nfp
 hdfs dfs -moveFromLocal gbpusd/ /user/cloudera/rawdata/hist_fx_nfp
 hdfs dfs -moveFromLocal usdjpy/ /user/cloudera/rawdata/hist_fx_nfp
+hdfs dfs -moveFromLocal eurusd_gaps/* /user/cloudera/rawdata/hist_fx_nfp/gaps/eurusd
+hdfs dfs -moveFromLocal gbpusd_gaps/* /user/cloudera/rawdata/hist_fx_nfp/gaps/gbpusd
+hdfs dfs -moveFromLocal usdjpy_gaps/* /user/cloudera/rawdata/hist_fx_nfp/gaps/usdjpy
 
 create schema fx_nfp;
 use fx_nfp;
